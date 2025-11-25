@@ -1,9 +1,22 @@
-# Build artifacts
-krystal
-src/*.o
+# Bibliotecas
+*.o
+*.dll
 
-# Editor cruft
+# Executaveis
+*.exe
+main
+
+# Backups
+*.bk
+*.backup
+*_bk
+*_backup
+
+# Arquivos de editores
 .DS_Store
 *.swp
 *.swo
 *.log
+*.ec
+*.el
+*.json
