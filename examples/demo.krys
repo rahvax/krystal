@@ -1,0 +1,7 @@
+# Demo file for the Krystal
+let answer = 42;
+let truthy = true;
+let mood = :happy;
+
+false;
+:done;

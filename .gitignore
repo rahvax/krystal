@@ -1,0 +1,9 @@
+# Build artifacts
+krystal
+src/*.o
+
+# Editor cruft
+.DS_Store
+*.swp
+*.swo
+*.log
