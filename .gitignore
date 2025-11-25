@@ -5,6 +5,7 @@
 # Executaveis
 *.exe
 main
+build/*
 
 # Backups
 *.bk
