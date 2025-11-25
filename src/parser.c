@@ -1,72 +1,44 @@
 #include "header/parser.h"
-
 #include <stdarg.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-
-typedef struct {
-  const TokenStream *stream;
-  size_t pos;
-  char *error;
-  size_t error_size;
-} Parser;
-
-static ASTNode *parse_sequence(Parser *parser);
-static ASTNode *parse_statement(Parser *parser);
-static ASTNode *parse_let(Parser *parser);
-static ASTNode *parse_literal(Parser *parser);
-static bool match(Parser *parser, TokenKind kind);
-static bool check(const Parser *parser, TokenKind kind);
-static const Token *advance(Parser *parser);
-static bool is_at_end(const Parser *parser);
-static const Token *peek(const Parser *parser);
-static const Token *previous(const Parser *parser);
-static void set_error(Parser *parser, const Token *token, const char *fmt, ...);
-static ASTNode *make_node(NodeKind kind);
-static char *copy_token_text(const Token *token, size_t skip_prefix);
-static bool append_seq_item(ASTNode *seq, ASTNode *item);
-
-bool parse_tokens(const TokenStream *stream, ASTNode **out_ast, char *error,
-                  size_t error_size) {
-  if (!stream || !out_ast) {
+bool ParseTokens(const TokenStream *stream, ASTNode **outAst, char *error, size_t errorSize) {
+  if (!stream || !outAst)
     return false;
-  }
   Parser parser = {
       .stream = stream,
       .pos = 0,
       .error = error,
-      .error_size = error_size,
+      .errorSize = errorSize,
   };
 
-  ASTNode *root = parse_sequence(&parser);
-  if (!root) {
+  ASTNode *root = ParseSequence(&parser);
+  if (!root) 
     return false;
-  }
-
-  *out_ast = root;
+  *outAst = root;
   return true;
 }
 
-static ASTNode *parse_sequence(Parser *parser) {
-  ASTNode *seq = make_node(AST_SEQ);
+ASTNode *ParseSequence(Parser *parser) {
+  ASTNode *seq = MakeNode(AST_SEQ);
   if (!seq) {
-    set_error(parser, peek(parser), "Failed to allocate AST node.");
+    SetErrorParser(parser, Peek(parser), "Failed to allocate AST node.");
     return NULL;
   }
   seq->seq.items = NULL;
   seq->seq.count = 0;
 
-  while (!is_at_end(parser)) {
-    ASTNode *statement = parse_statement(parser);
+  while (!IsAtEnd(parser)) {
+    ASTNode *statement = ParseStatement(parser);
     if (!statement) {
-      free_ast(seq);
+      FreeAst(seq);
       return NULL;
     }
-    if (!append_seq_item(seq, statement)) {
-      set_error(parser, peek(parser), "Failed to allocate statement list.");
-      free_ast(statement);
-      free_ast(seq);
+    if (!AppendItem(seq, statement)) {
+      SetErrorParser(parser, Peek(parser), "Failed to allocate statement list.");
+      FreeAst(statement);
+      FreeAst(seq);
       return NULL;
     }
   }
@@ -74,156 +46,155 @@ static ASTNode *parse_sequence(Parser *parser) {
   return seq;
 }
 
-static ASTNode *parse_statement(Parser *parser) {
-  if (match(parser, TOKEN_LET)) {
-    return parse_let(parser);
+ASTNode *ParseStatement(Parser *parser) {
+  if (Match(parser, TOKEN_LET)) {
+    return ParseLet(parser);
   }
-  ASTNode *expr = parse_literal(parser);
+  ASTNode *expr = ParseLiteral(parser);
   if (!expr) {
     return NULL;
   }
-  if (!match(parser, TOKEN_SEMICOLON)) {
-    set_error(parser, peek(parser), "Expected ';' after expression.");
-    free_ast(expr);
+  if (!Match(parser, TOKEN_SEMICOLON)) {
+    SetErrorParser(parser, Peek(parser), "Expected ';' after expression.");
+    FreeAst(expr);
     return NULL;
   }
   return expr;
 }
 
-static ASTNode *parse_let(Parser *parser) {
-  if (!check(parser, TOKEN_IDENT)) {
-    set_error(parser, peek(parser), "Expected identifier after 'let'.");
+ASTNode *ParseLet(Parser *parser) {
+  if (!Check(parser, TOKEN_IDENT)) {
+    SetErrorParser(parser, Peek(parser), "Expected identifier after 'let'.");
     return NULL;
   }
-  const Token *name_token = advance(parser);
-  if (!match(parser, TOKEN_EQUAL)) {
-    set_error(parser, peek(parser), "Expected '=' after identifier.");
+  const Token *nameToken = Advance(parser);
+  if (!Match(parser, TOKEN_EQUAL)) {
+    SetErrorParser(parser, Peek(parser), "Expected '=' after identifier.");
     return NULL;
   }
-  ASTNode *value = parse_literal(parser);
+  ASTNode *value = ParseLiteral(parser);
   if (!value) {
     return NULL;
   }
-  if (!match(parser, TOKEN_SEMICOLON)) {
-    set_error(parser, peek(parser), "Expected ';' after let value.");
-    free_ast(value);
+  if (!Match(parser, TOKEN_SEMICOLON)) {
+    SetErrorParser(parser, Peek(parser), "Expected ';' after let value.");
+    FreeAst(value);
     return NULL;
   }
-  ASTNode *node = make_node(AST_LET);
+  ASTNode *node = MakeNode(AST_LET);
   if (!node) {
-    set_error(parser, name_token, "Failed to allocate AST node.");
-    free_ast(value);
+    SetErrorParser(parser, nameToken, "Failed to allocate AST node.");
+    FreeAst(value);
     return NULL;
   }
   node->let_stmt.value = value;
-  node->let_stmt.name = copy_token_text(name_token, 0);
+  node->let_stmt.name = CopyToken(nameToken, 0);
   if (!node->let_stmt.name) {
-    set_error(parser, name_token, "Failed to copy identifier.");
-    free_ast(node);
+    SetErrorParser(parser, nameToken, "Failed to copy identifier.");
+    FreeAst(node);
     return NULL;
   }
   return node;
 }
 
-static ASTNode *parse_literal(Parser *parser) {
-  if (match(parser, TOKEN_INT)) {
-    const Token *token = previous(parser);
-    ASTNode *node = make_node(AST_INT);
+ASTNode *ParseLiteral(Parser *parser) {
+  if (Match(parser, TOKEN_INT)) {
+    const Token *token = Previous(parser);
+    ASTNode *node = MakeNode(AST_INT);
     if (!node) {
-      set_error(parser, token, "Failed to allocate AST node.");
+      SetErrorParser(parser, token, "Failed to allocate AST node.");
       return NULL;
     }
-    node->int_lit.value = token->int_value;
+    node->int_lit.value = token->intValue;
     return node;
   }
-  if (match(parser, TOKEN_BOOL)) {
-    const Token *token = previous(parser);
-    ASTNode *node = make_node(AST_BOOL);
+  if (Match(parser, TOKEN_BOOL)) {
+    const Token *token = Previous(parser);
+    ASTNode *node = MakeNode(AST_BOOL);
     if (!node) {
-      set_error(parser, token, "Failed to allocate AST node.");
+      SetErrorParser(parser, token, "Failed to allocate AST node.");
       return NULL;
     }
-    node->bool_lit.value = token->bool_value;
+    node->bool_lit.value = token->boolValue;
     return node;
   }
-  if (match(parser, TOKEN_ATOM)) {
-    const Token *token = previous(parser);
-    ASTNode *node = make_node(AST_ATOM);
+  if (Match(parser, TOKEN_ATOM)) {
+    const Token *token = Previous(parser);
+    ASTNode *node = MakeNode(AST_ATOM);
     if (!node) {
-      set_error(parser, token, "Failed to allocate AST node.");
+      SetErrorParser(parser, token, "Failed to allocate AST node.");
       return NULL;
     }
-    node->atom_lit.value = copy_token_text(token, 1);
+    node->atom_lit.value = CopyToken(token, 1);
     if (!node->atom_lit.value) {
-      set_error(parser, token, "Failed to copy atom literal.");
-      free_ast(node);
+      SetErrorParser(parser, token, "Failed to copy atom literal.");
+      FreeAst(node);
       return NULL;
     }
     return node;
   }
 
-  set_error(parser, peek(parser), "Expected int, bool, or atom literal.");
+  SetErrorParser(parser, Peek(parser), "Expected int, bool, or atom literal.");
   return NULL;
 }
 
-static bool match(Parser *parser, TokenKind kind) {
-  if (check(parser, kind)) {
-    advance(parser);
+bool Match(Parser *parser, TokenKind kind) {
+  if (Check(parser, kind)) {
+    Advance(parser);
     return true;
   }
   return false;
 }
 
-static bool check(const Parser *parser, TokenKind kind) {
-  if (is_at_end(parser)) {
+bool Check(const Parser *parser, TokenKind kind) {
+  if (IsAtEnd(parser)) {
     return false;
   }
-  return peek(parser)->kind == kind;
+  return Peek(parser)->kind == kind;
 }
 
-static const Token *advance(Parser *parser) {
-  if (!is_at_end(parser)) {
+const Token *Advance(Parser *parser) {
+  if (!IsAtEnd(parser)) {
     parser->pos++;
   }
-  return previous(parser);
+  return Previous(parser);
 }
 
-static bool is_at_end(const Parser *parser) {
-  return peek(parser)->kind == TOKEN_EOF;
+bool IsAtEnd(const Parser *parser) {
+  return Peek(parser)->kind == TOKEN_EOF;
 }
 
-static const Token *peek(const Parser *parser) {
+const Token *Peek(const Parser *parser) {
   return &parser->stream->items[parser->pos];
 }
 
-static const Token *previous(const Parser *parser) {
+const Token *Previous(const Parser *parser) {
   return &parser->stream->items[parser->pos - 1];
 }
 
-static void set_error(Parser *parser, const Token *token, const char *fmt,
-                      ...) {
-  if (!parser->error || parser->error_size == 0) {
+void SetErrorParser(Parser *parser, const Token *token, const char *fmt, ...) {
+  if (!parser->error || parser->errorSize == 0) {
     return;
   }
   va_list args;
   va_start(args, fmt);
   if (token) {
-    int prefix = snprintf(parser->error, parser->error_size,
+    int prefix = snprintf(parser->error, parser->errorSize,
                           "Parser error at line %d, column %d: ", token->line,
                           token->column);
-    if (prefix < 0 || (size_t)prefix >= parser->error_size) {
+    if (prefix < 0 || (size_t)prefix >= parser->errorSize) {
       va_end(args);
       return;
     }
-    vsnprintf(parser->error + prefix, parser->error_size - (size_t)prefix, fmt,
+    vsnprintf(parser->error + prefix, parser->errorSize - (size_t)prefix, fmt,
               args);
   } else {
-    vsnprintf(parser->error, parser->error_size, fmt, args);
+    vsnprintf(parser->error, parser->errorSize, fmt, args);
   }
   va_end(args);
 }
 
-static ASTNode *make_node(NodeKind kind) {
+ASTNode *MakeNode(NodeKind kind) {
   ASTNode *node = calloc(1, sizeof(ASTNode));
   if (node) {
     node->kind = kind;
@@ -231,21 +202,21 @@ static ASTNode *make_node(NodeKind kind) {
   return node;
 }
 
-static char *copy_token_text(const Token *token, size_t skip_prefix) {
-  if (!token || token->length < skip_prefix) {
+char *CopyToken(const Token *token, size_t skipPrefix) {
+  if (!token || token->length < skipPrefix) {
     return NULL;
   }
-  size_t length = token->length - skip_prefix;
+  size_t length = token->length - skipPrefix;
   char *text = malloc(length + 1);
   if (!text) {
     return NULL;
   }
-  memcpy(text, token->start + skip_prefix, length);
+  memcpy(text, token->start + skipPrefix, length);
   text[length] = '\0';
   return text;
 }
 
-static bool append_seq_item(ASTNode *seq, ASTNode *item) {
+bool AppendItem(ASTNode *seq, ASTNode *item) {
   size_t new_count = seq->seq.count + 1;
   ASTNode **new_items = realloc(seq->seq.items, new_count * sizeof(ASTNode *));
   if (!new_items) {
@@ -257,7 +228,7 @@ static bool append_seq_item(ASTNode *seq, ASTNode *item) {
   return true;
 }
 
-void free_ast(ASTNode *node) {
+void FreeAst(ASTNode *node) {
   if (!node) {
     return;
   }
@@ -270,11 +241,11 @@ void free_ast(ASTNode *node) {
     break;
   case AST_LET:
     free(node->let_stmt.name);
-    free_ast(node->let_stmt.value);
+    FreeAst(node->let_stmt.value);
     break;
   case AST_SEQ:
     for (size_t i = 0; i < node->seq.count; ++i) {
-      free_ast(node->seq.items[i]);
+      FreeAst(node->seq.items[i]);
     }
     free(node->seq.items);
     break;

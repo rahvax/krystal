@@ -5,40 +5,13 @@
 #include <stdlib.h>
 #include <string.h>
 
-typedef struct {
-  const char *source;
-  size_t length;
-  size_t start;
-  size_t current;
-  int line;
-  int column;
-  int start_line;
-  int start_column;
-  TokenStream *stream;
-  char *error;
-  size_t error_size;
-} Lexer;
-
-static bool scan_token(Lexer *lexer);
-static bool add_token(Lexer *lexer, Token token);
-static bool ensure_capacity(TokenStream *stream);
-static void set_error(Lexer *lexer, const char *message);
-static char advance(Lexer *lexer);
-static char peek(const Lexer *lexer);
-static void skip_comment(Lexer *lexer);
-static bool lex_number(Lexer *lexer);
-static bool lex_identifier(Lexer *lexer);
-static bool lex_atom(Lexer *lexer);
-
-bool lex_source(const char *source, TokenStream *out_stream, char *error,
-                size_t error_size) {
-  if (!source || !out_stream) {
+bool LexSource(const char *source, TokenStream *outStream, char *error, size_t errorSize) {
+  if (!source || !outStream) 
     return false;
-  }
 
-  out_stream->items = NULL;
-  out_stream->count = 0;
-  out_stream->capacity = 0;
+  outStream->items = NULL;
+  outStream->count = 0;
+  outStream->capacity = 0;
 
   Lexer lexer = {
       .source = source,
@@ -47,19 +20,19 @@ bool lex_source(const char *source, TokenStream *out_stream, char *error,
       .current = 0,
       .line = 1,
       .column = 1,
-      .start_line = 1,
-      .start_column = 1,
-      .stream = out_stream,
+      .startLine = 1,
+      .startColumn = 1,
+      .stream = outStream,
       .error = error,
-      .error_size = error_size,
+      .errorSize = errorSize,
   };
 
   while (lexer.current < lexer.length) {
     lexer.start = lexer.current;
-    lexer.start_line = lexer.line;
-    lexer.start_column = lexer.column;
-    if (!scan_token(&lexer)) {
-      free_token_stream(out_stream);
+    lexer.startLine = lexer.line;
+    lexer.startColumn = lexer.column;
+    if (!ScanToken(&lexer)) {
+      FreeToken(outStream);
       return false;
     }
   }
@@ -71,100 +44,92 @@ bool lex_source(const char *source, TokenStream *out_stream, char *error,
       .line = lexer.line,
       .column = lexer.column,
   };
-  if (!add_token(&lexer, eof)) {
-    set_error(&lexer, "Failed to allocate memory for tokens.");
-    free_token_stream(out_stream);
+  if (!AddToken(&lexer, eof)) {
+    SetError(&lexer, "Failed to allocate memory for tokens.");
+    FreeToken(outStream);
     return false;
   }
 
   return true;
 }
 
-void free_token_stream(TokenStream *stream) {
-  if (!stream) {
+void FreeToken(TokenStream *stream) {
+  if (!stream)
     return;
-  }
   free(stream->items);
   stream->items = NULL;
   stream->count = 0;
   stream->capacity = 0;
 }
 
-static bool scan_token(Lexer *lexer) {
-  char c = advance(lexer);
+bool ScanToken(Lexer *lexer) {
+  char c = AdvanceLexer(lexer);
   switch (c) {
-  case ' ':
-  case '\r':
-  case '\t':
-    return true;
-  case '\n':
-    return true;
-  case '#':
-    skip_comment(lexer);
-    return true;
-  case '=': {
-    Token token = {
+    case ' ':
+    case '\r':
+    case '\t':
+    case '\n':
+      return true;
+    case '#':
+      SkipComment(lexer);
+      return true;
+    case '=': {
+      Token token = {
         .kind = TOKEN_EQUAL,
         .start = lexer->source + lexer->start,
         .length = lexer->current - lexer->start,
-        .line = lexer->start_line,
-        .column = lexer->start_column,
-    };
-    return add_token(lexer, token);
-  }
-  case ';': {
-    Token token = {
+        .line = lexer->startLine,
+        .column = lexer->startColumn,
+      };
+      return AddToken(lexer, token);
+    }
+    case ';': {
+      Token token = {
         .kind = TOKEN_SEMICOLON,
         .start = lexer->source + lexer->start,
         .length = lexer->current - lexer->start,
-        .line = lexer->start_line,
-        .column = lexer->start_column,
-    };
-    return add_token(lexer, token);
-  }
-  case ':':
-    return lex_atom(lexer);
-  default:
-    break;
-  }
-
-  if (isdigit((unsigned char)c)) {
-    return lex_number(lexer);
+        .line = lexer->startLine,
+        .column = lexer->startColumn,
+      };
+      return AddToken(lexer, token);
+    }
+    case ':':
+      return LexAtom(lexer);
+    default:
+      break;
   }
 
-  if (isalpha((unsigned char)c) || c == '_') {
-    return lex_identifier(lexer);
-  }
+  if (isdigit((unsigned char)c)) 
+    return LexNumber(lexer);
+  if (isalpha((unsigned char)c) || c == '_') 
+    return LexIdentifier(lexer);
 
-  set_error(lexer, "Unexpected character.");
+  SetError(lexer, "Unexpected character.");
   return false;
 }
 
-static bool lex_number(Lexer *lexer) {
-  while (lexer->current < lexer->length &&
-         isdigit((unsigned char)peek(lexer))) {
-    advance(lexer);
-  }
+bool LexNumber(Lexer *lexer) {
+  while (lexer->current < lexer->length && isdigit((unsigned char)PeekLexer(lexer)))
+    AdvanceLexer(lexer);
   const char *start = lexer->source + lexer->start;
   long long value = strtoll(start, NULL, 10);
   Token token = {
       .kind = TOKEN_INT,
       .start = start,
       .length = lexer->current - lexer->start,
-      .line = lexer->start_line,
-      .column = lexer->start_column,
-      .int_value = value,
+      .line = lexer->startLine,
+      .column = lexer->startColumn,
+      .intValue = value,
   };
-  return add_token(lexer, token);
+  return AddToken(lexer, token);
 }
 
-static bool lex_identifier(Lexer *lexer) {
+bool LexIdentifier(Lexer *lexer) {
   while (lexer->current < lexer->length) {
-    char c = peek(lexer);
-    if (!isalnum((unsigned char)c) && c != '_') {
+    char c = PeekLexer(lexer);
+    if (!isalnum((unsigned char)c) && c != '_') 
       break;
-    }
-    advance(lexer);
+    AdvanceLexer(lexer);
   }
 
   const char *start = lexer->source + lexer->start;
@@ -174,106 +139,102 @@ static bool lex_identifier(Lexer *lexer) {
       .kind = TOKEN_IDENT,
       .start = start,
       .length = length,
-      .line = lexer->start_line,
-      .column = lexer->start_column,
+      .line = lexer->startLine,
+      .column = lexer->startColumn,
   };
 
-  if (length == 3 && strncmp(start, "let", 3) == 0) {
+  if (length == 3 && strncmp(start, "let", 3) == 0)
     token.kind = TOKEN_LET;
-  } else if (length == 4 && strncmp(start, "true", 4) == 0) {
+  else if (length == 4 && strncmp(start, "true", 4) == 0) {
     token.kind = TOKEN_BOOL;
-    token.bool_value = true;
-  } else if (length == 5 && strncmp(start, "false", 5) == 0) {
-    token.kind = TOKEN_BOOL;
-    token.bool_value = false;
+    token.boolValue = true;
   }
-
-  return add_token(lexer, token);
+  else if (length == 5 && strncmp(start, "false", 5) == 0) {
+    token.kind = TOKEN_BOOL;
+    token.boolValue = false;
+  }
+  return AddToken(lexer, token);
 }
 
-static bool lex_atom(Lexer *lexer) {
+bool LexAtom(Lexer *lexer) {
   if (lexer->current >= lexer->length) {
-    set_error(lexer, "Atom literal requires a name.");
+    SetError(lexer, "Atom literal requires a name.");
     return false;
   }
-  char first = peek(lexer);
+  char first = PeekLexer(lexer);
   if (!isalpha((unsigned char)first) && first != '_') {
-    set_error(lexer, "Atom literal must start with a letter or '_'.");
+    SetError(lexer, "Atom literal must start with a letter or '_'.");
     return false;
   }
-  advance(lexer);
+
+  AdvanceLexer(lexer);
   while (lexer->current < lexer->length) {
-    char c = peek(lexer);
-    if (!isalnum((unsigned char)c) && c != '_') {
+    char c = PeekLexer(lexer);
+    if (!isalnum((unsigned char)c) && c != '_') 
       break;
-    }
-    advance(lexer);
+    AdvanceLexer(lexer);
   }
+
   Token token = {
       .kind = TOKEN_ATOM,
       .start = lexer->source + lexer->start,
       .length = lexer->current - lexer->start,
-      .line = lexer->start_line,
-      .column = lexer->start_column,
+      .line = lexer->startLine,
+      .column = lexer->startColumn,
   };
-  return add_token(lexer, token);
+  return AddToken(lexer, token);
 }
 
-static bool add_token(Lexer *lexer, Token token) {
-  if (!ensure_capacity(lexer->stream)) {
-    set_error(lexer, "Failed to allocate memory for tokens.");
+bool AddToken(Lexer *lexer, Token token) {
+  if (!EnsureCapacity(lexer->stream)) {
+    SetError(lexer, "Failed to allocate memory for tokens.");
     return false;
   }
   lexer->stream->items[lexer->stream->count++] = token;
   return true;
 }
 
-static bool ensure_capacity(TokenStream *stream) {
-  if (stream->count < stream->capacity) {
+bool EnsureCapacity(TokenStream *stream) {
+  if (stream->count < stream->capacity) 
     return true;
-  }
   size_t new_capacity = stream->capacity < 8 ? 8 : stream->capacity * 2;
   Token *items = realloc(stream->items, new_capacity * sizeof(Token));
-  if (!items) {
+  if (!items) 
     return false;
-  }
   stream->items = items;
   stream->capacity = new_capacity;
   return true;
 }
 
-static void set_error(Lexer *lexer, const char *message) {
-  if (!lexer->error || lexer->error_size == 0) {
+void SetError(Lexer *lexer, const char *message) {
+  if (!lexer->error || lexer->errorSize == 0) 
     return;
-  }
-  snprintf(lexer->error, lexer->error_size,
-           "Lexer error at line %d, column %d: %s", lexer->start_line,
-           lexer->start_column, message);
+  snprintf(lexer->error, lexer->errorSize,
+           "Lexer error at line %d, column %d: %s", lexer->startLine,
+           lexer->startColumn, message);
 }
 
-static char advance(Lexer *lexer) {
+char AdvanceLexer(Lexer *lexer) {
   char c = lexer->source[lexer->current++];
   if (c == '\n') {
     lexer->line += 1;
     lexer->column = 1;
-  } else {
-    lexer->column += 1;
   }
+  else 
+    lexer->column += 1;
   return c;
 }
 
-static char peek(const Lexer *lexer) {
-  if (lexer->current >= lexer->length) {
+char PeekLexer(const Lexer *lexer) {
+  if (lexer->current >= lexer->length) 
     return '\0';
-  }
   return lexer->source[lexer->current];
 }
 
-static void skip_comment(Lexer *lexer) {
+void SkipComment(Lexer *lexer) {
   while (lexer->current < lexer->length) {
-    char c = advance(lexer);
-    if (c == '\n') {
+    char c = AdvanceLexer(lexer);
+    if (c == '\n')
       break;
-    }
   }
 }

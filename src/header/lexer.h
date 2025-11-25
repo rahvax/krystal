@@ -1,11 +1,12 @@
-#pragma once
+#ifndef _LEXER_H
+#define _LEXER_H
 
 #include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
 
 typedef enum {
-  TOKEN_EOF = 0,
+  TOKEN_EOF,
   TOKEN_IDENT,
   TOKEN_INT,
   TOKEN_BOOL,
@@ -22,8 +23,8 @@ typedef struct {
   size_t length;
   int line;
   int column;
-  int64_t int_value;
-  bool bool_value;
+  int64_t intValue;
+  bool boolValue;
 } Token;
 
 typedef struct {
@@ -32,6 +33,32 @@ typedef struct {
   size_t capacity;
 } TokenStream;
 
-bool lex_source(const char *source, TokenStream *out_stream, char *error,
-                size_t error_size);
-void free_token_stream(TokenStream *stream);
+bool LexSource(const char *source, TokenStream *outStream, char *error,
+                size_t errorSize);
+void FreeToken(TokenStream *stream);
+
+typedef struct {
+  const char *source;
+  size_t length;
+  size_t start;
+  size_t current;
+  int line;
+  int column;
+  int startLine;
+  int startColumn;
+  TokenStream *stream;
+  char *error;
+  size_t errorSize;
+} Lexer;
+
+bool ScanToken(Lexer *lexer);
+bool AddToken(Lexer *lexer, Token token);
+bool EnsureCapacity(TokenStream *stream);
+void SetError(Lexer *lexer, const char *message);
+char AdvanceLexer(Lexer *lexer);
+char PeekLexer(const Lexer *lexer);
+void SkipComment(Lexer *lexer);
+bool LexNumber(Lexer *lexer);
+bool LexIdentifier(Lexer *lexer);
+bool LexAtom(Lexer *lexer);
+#endif

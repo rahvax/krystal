@@ -6,78 +6,86 @@
 #include "header/lexer.h"
 #include "header/parser.h"
 
-static char *read_file(const char *path);
-static void print_ast(const ASTNode *node, int indent);
+static char *ReadFile(const char *path);
+static void PrintAst(const ASTNode *node, int indent);
 
 int main(int argc, char **argv) {
+  char *source, error[256] = {0};
+  TokenStream stream = {0};
+  ASTNode *ast = NULL;
+
   if (argc < 2) {
     fprintf(stderr, "Usage: %s <file.krys>\n", argv[0]);
     return 1;
   }
 
-  char *source = read_file(argv[1]);
-  if (!source) {
+  if (!(source = ReadFile(argv[1]))) {
     fprintf(stderr, "Failed to read %s\n", argv[1]);
     return 1;
   }
 
-  char error[256] = {0};
-  TokenStream stream = {0};
-  if (!lex_source(source, &stream, error, sizeof(error))) {
+  if (!LexSource(source, &stream, error, sizeof(error))) {
     fprintf(stderr, "%s\n", error[0] ? error : "Lexer failed.");
     free(source);
     return 1;
   }
 
-  ASTNode *ast = NULL;
-  if (!parse_tokens(&stream, &ast, error, sizeof(error))) {
+  if (!ParseTokens(&stream, &ast, error, sizeof(error))) {
     fprintf(stderr, "%s\n", error[0] ? error : "Parser failed.");
-    free_token_stream(&stream);
+    FreeToken(&stream);
     free(source);
     return 1;
   }
 
-  print_ast(ast, 0);
-
-  free_ast(ast);
-  free_token_stream(&stream);
+  PrintAst(ast, 0);
+  FreeAst(ast);
+  FreeToken(&stream);
   free(source);
   return 0;
 }
 
-static char *read_file(const char *path) {
-  FILE *file = fopen(path, "rb");
-  if (!file) {
+static char *ReadFile(const char *path) {
+  FILE *file;
+  long size=0;
+  char *buffer;
+  size_t read;
+  
+  if (!(file=fopen(path, "rb")))
     return NULL;
-  }
+
   if (fseek(file, 0, SEEK_END) != 0) {
     fclose(file);
     return NULL;
   }
-  long size = ftell(file);
+
+  size = ftell(file);
   if (size < 0) {
     fclose(file);
     return NULL;
   }
+
   rewind(file);
-  char *buffer = malloc((size_t)size + 1);
+  buffer = malloc((size_t)size + 1);
+
   if (!buffer) {
     fclose(file);
     return NULL;
   }
-  size_t read = fread(buffer, 1, (size_t)size, file);
+
+  read = fread(buffer, 1, (size_t)size, file);
   buffer[read] = '\0';
+
   fclose(file);
   return buffer;
 }
 
-static void print_ast(const ASTNode *node, int indent) {
-  if (!node) {
+static void PrintAst(const ASTNode *node, int indent) {
+  if (!node)
     return;
-  }
-  for (int i = 0; i < indent; ++i) {
+
+  for (int i = 0; i < indent; ++i) 
     printf("  ");
-  }
+
   switch (node->kind) {
   case AST_INT:
     printf("Int(%lld)\n", node->int_lit.value);
@@ -90,13 +98,12 @@ static void print_ast(const ASTNode *node, int indent) {
     break;
   case AST_LET:
     printf("Let(%s)\n", node->let_stmt.name ? node->let_stmt.name : "?");
-    print_ast(node->let_stmt.value, indent + 1);
+    PrintAst(node->let_stmt.value, indent + 1);
     break;
   case AST_SEQ:
     printf("Program\n");
-    for (size_t i = 0; i < node->seq.count; ++i) {
-      print_ast(node->seq.items[i], indent + 1);
-    }
+    for (size_t i = 0; i < node->seq.count; ++i) 
+      PrintAst(node->seq.items[i], indent + 1);
     break;
   }
 }
